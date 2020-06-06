@@ -6,6 +6,7 @@ import urllib.request
 from urllib.error import HTTPError
 from difflib import SequenceMatcher
 from habanero import Crossref
+import numpy as np
 
 # TODO(paula): deal with duplicate bibkeys
 
@@ -27,9 +28,33 @@ def valid_title(title):
 
     valid = (title is not None) and \
             (len(title) > 20) and \
-            (sum(c.isdigit() for c in title) / len(title) < 0.1)
+            (sum(c.isdigit() for c in title) / len(title) < 0.1) and \
+            ('Paper' not in title) and \
+            ('paper' not in title) and \
+            ('award' not in title) and \
+            ('Award' not in title)
             
     return valid
+
+
+def retrieve_title(info_dict, filename):
+    if '/Title' in info_dict.keys() and valid_title(info_dict.title):
+        search_title = info_dict.title
+        metadata = True
+
+    # Otherwise, get title from the file name
+    # Assumes filename is '<year> - <author> - <title>.pdf'
+    else:
+        temp = filename[filename.find('-')+2:-4]
+        search_title = temp[temp.find('-')+2:]
+        metadata = False
+
+    return search_title, metadata
+
+
+def retrieve_file_author(filename):
+    temp = filename[filename.find('-')+2:]
+    return temp[:temp.find('-')-1]
 
 
 def get_doi(path, file):
@@ -49,23 +74,17 @@ def get_doi(path, file):
             # We found the DOI, we can stop here
             return info['/doi']
 
-        # Otherwise, if title is found in the metadata and it is valid
-        if '/Title' in info.keys() and valid_title(info.title):
-            search_title = info.title
-            metadata = True
-
-        # Otherwise, get title from the file name
-        # Assumes filename is '<year> - <author> - <title>.pdf'
-        else:
-            temp = file[file.find('-')+2:-4]
-            search_title = temp[temp.find('-')+2:]
-            metadata = False
+        # Otherwise, get title from the metadata or from the filename
+        search_title, metadata = retrieve_title(info, file)
 
         # Query crossref API by title
         cr = Crossref()
-        results = cr.works(query=search_title)
+        results = cr.works(query=search_title + ' ')
 
         # Look for a match in all the results returned
+        candidates = []
+        similarities = []
+
         for item in results['message']['items']:
 
             if 'title' in item.keys():
@@ -75,16 +94,38 @@ def get_doi(path, file):
 
                 # If they are very similar, then it's probably the same article
                 if similarity > 0.8:
-                    if metadata:
-                        print('(Found by title in metadata)   ', file[:50], '...')
-                    else:
-                        print('(Found by title in filename)   ', file[:50], '...')
-
                     # Found a match, return the doi
-                    return item['DOI']
+                    candidates.append(item)
+                    similarities.append(similarity)
 
-        # If we reach this line, we didn't find anything, will return None
-        print('(Query did not return anything)', file[:50], '...')
+        # Find author name in file in any of the author names retrieved
+            file_author = retrieve_file_author(file)
+
+        if len(candidates) >= 1:
+
+            # If multiple candidates, sort in descending order of similarity
+            if len(candidates) >= 2:
+                order_similarities = np.argsort(similarities)[::-1]
+                candidates = np.array(candidates)[order_similarities].tolist()
+
+            for candidate in candidates:
+                if 'author' in candidate.keys():
+
+                    for author in candidate['author']:
+                        if similar(file_author, author['family']) > 0.8:
+
+                            if metadata:
+                                print('(Found by title in metadata)   ', file[:50], '...')
+                            else:
+                                print('(Found by title in filename)   ', file[:50], '...')
+
+                            return candidate['DOI']
+
+            print('(Title match, incorrect author)', file[:50], '...')
+
+        else:
+            # If we reach this line, we didn't find anything, will return None
+            print('(Query did not return anything)', file[:50], '...')
 
 
 def separate_dois_and_errors(path, files):
@@ -94,6 +135,7 @@ def separate_dois_and_errors(path, files):
     '''
 
     error_files = []
+    doi_files = []
     dois = []
 
     for f in files:
@@ -104,8 +146,9 @@ def separate_dois_and_errors(path, files):
             error_files.append(f)
         else:
             dois.append(result)
+            doi_files.append(f)
 
-    return dois, error_files
+    return dois, doi_files, error_files
 
 
 def doi_to_bib(doi):
@@ -144,17 +187,34 @@ def main():
 
     # Get dois from valid metadata and...
     # ...idenfity problematic files
-    dois, error_files = separate_dois_and_errors(dirpath, pdf_files)
+    dois, doi_files, error_files = separate_dois_and_errors(dirpath, pdf_files)
 
     # Print valid bib entries to a bib file
     if len(dois) > 0:
-        print()
-        print('Valid bibtex entries were exported to "out.bib"')
+        unique_keys = []
 
         with open('out.bib', 'w') as f:
             for doi in dois:
+
+                # Get bibtex entry for this doi
                 bibtex = doi_to_bib(doi)
+
+                # Extract unique key generated for this entry
+                unique_key =  bibtex[bibtex.find('{')+1:bibtex.find(',')]
+
+                # If this key has already been used
+                while unique_key in unique_keys:
+
+                    # Add '_1' at the end of the key and update the bibtex entry
+                    unique_key += '_1'
+                    bibtex = bibtex[:bibtex.find(',')] + '_1' + bibtex[bibtex.find(','):]
+
+                # Add unique key to list
+                unique_keys.append(unique_key)
+                
                 print(bibtex, file=f)
+        print()
+        print('Valid bibtex entries were exported to "out.bib"')
 
     # Print problematic files to txt file
     if len(error_files) > 0:
