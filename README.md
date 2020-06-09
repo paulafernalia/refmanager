@@ -2,7 +2,10 @@
 
 **General description**
 
-Generate a bibtex file with based on pdf documents such as books and articles included in a directory.
+Generate a bibtex file with based on PDF documents such as books and articles included in a directory.
+
+**Motivation**
+Good PDF reader + script to generate bibtex entries automatically = I don't need Mendeley
 
 **How it works?**
 
