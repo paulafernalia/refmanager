@@ -1,4 +1,7 @@
 # refmanager
+
+**General description**
+
 Generate a bibtex file with based on pdf documents such as books and articles included in a directory.
 
 **How it works?**
