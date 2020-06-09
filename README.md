@@ -7,15 +7,15 @@ Some articles downloaded from online repositories contain the DOI in the metadat
 
 **Usage**
 
-Mode 1: `python main.py`
+*Mode 1*: `python main.py`
 
 It will generate a .bib file reading all pdf files in the current directory.
 
-Mode2: `python main.py /path/to/folder/with/pdfs`
+*Mode2*: `python main.py /path/to/folder/with/pdfs`
 
 It will generate a .bib file reading all pdf files in the directory passed as an argument.
 
-Mode 3: `python main.py /path/to/folder/with/pdfs filename.pdf`
+*Mode 3*: `python main.py /path/to/folder/with/pdfs filename.pdf`
 
 It will attempt to generate a .bib file with a single bib entry based on the file passed as the second argument.
 
