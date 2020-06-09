@@ -14,6 +14,8 @@ Some articles downloaded from online repositories contain the DOI in the metadat
 
 ## Usage
 
+Download `main.py` and install dependencies with `pip install -r requirements.txt`.
+
 *Mode 1*: `python main.py`
 
 It will generate a .bib file reading all pdf files in the current directory.
